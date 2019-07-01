@@ -4,6 +4,7 @@ import (
     "net"
     "strconv"
     "fmt"
+    "time"
     "io/ioutil"
     "encoding/json"
     "context"
@@ -17,6 +18,7 @@ func getKafkaWriter(kafkaURL, topic string) *kafka.Writer {
 		Brokers:  []string{kafkaURL},
 		Topic:    topic,
 		Balancer: &kafka.LeastBytes{},
+		BatchTimeout: 50 * time.Millisecond,
 	})
 }
 
@@ -60,10 +62,12 @@ func handleConn(client net.Conn, kafkaWriter *kafka.Writer) {
 	fmt.Printf("data %s", data)
 	fmt.Printf("Content: ", result["version"], "button: ", result["button"])
 	msg := kafka.Message{
-			Key:   []byte(fmt.Sprintf("address-%s", result["type"])),
+			Key:   []byte(fmt.Sprintf("device-%s", result["Device_ID"])),
 			Value: data,
 			}
 	err := kafkaWriter.WriteMessages(context.Background(), msg)
-	fmt.Printf("error %s", err)
+	if err != nil { 
+		fmt.Println("Error", err)
+	}
 }
 
