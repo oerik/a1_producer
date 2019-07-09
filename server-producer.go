@@ -1,3 +1,11 @@
+// Erik Oomen, jul 2019
+//
+// This file opens a TCP listener at 3002 to receive json data.
+// This json data is in DeviceFromat-1.0 and is published to
+// kafka topic sensors.
+//
+// Warning: Not robust or designed for high performance.
+
 package main
 
 import (
@@ -11,7 +19,13 @@ import (
     kafka "github.com/segmentio/kafka-go"
 )
 
-const PORT = 3002
+const (
+	PORT = 3002
+	KAFKA_SERVER    = "192.168.1.106:9092"
+	SENSOR_TOPIC    = "sensors"
+)
+
+// Setup a kafka writer, tune for realtime pushes (50 msec)
 
 func getKafkaWriter(kafkaURL, topic string) *kafka.Writer {
 	return kafka.NewWriter(kafka.WriterConfig{
@@ -22,8 +36,9 @@ func getKafkaWriter(kafkaURL, topic string) *kafka.Writer {
 	})
 }
 
+
 func main() {
-    kafkaWriter := getKafkaWriter("192.168.1.106:9092", "sensors")
+    kafkaWriter := getKafkaWriter(KAFKA_SERVER, SENSOR_TOPIC)
     defer kafkaWriter.Close()
 
     server, err := net.Listen("tcp", ":" + strconv.Itoa(PORT))
@@ -36,6 +51,7 @@ func main() {
     }
 }
 
+// Accept a TCP socket
 func clientConns(listener net.Listener) chan net.Conn {
     ch := make(chan net.Conn)
     i := 0
@@ -54,19 +70,20 @@ func clientConns(listener net.Listener) chan net.Conn {
     return ch
 }
 
+// Read TCP data, dump to the console and send to kafka.
 func handleConn(client net.Conn, kafkaWriter *kafka.Writer) {
 	data,_ := ioutil.ReadAll(client)
 	client.Close()
 	var result map[string]interface{}
 	json.Unmarshal([]byte(data),  &result)
-	fmt.Printf("data %s", data)
+	fmt.Printf("data %s\n", data)
 	fmt.Printf("Content: ", result["version"], "button: ", result["button"])
 	msg := kafka.Message{
 			Key:   []byte(fmt.Sprintf("device-%s", result["Device_ID"])),
 			Value: data,
 			}
 	err := kafkaWriter.WriteMessages(context.Background(), msg)
-	if err != nil { 
+	if err != nil {
 		fmt.Println("Error", err)
 	}
 }
